@@ -38,7 +38,7 @@ enum PropertyAge {
     Old,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum DurationOfTransfer {
     Freehold,
     Leasehold,
@@ -151,15 +151,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Sorting entries by date...");
 
     entries.sort_unstable_by(|entry1, entry2| entry1.date.cmp(&entry2.date));
+    let filtered_entries: Vec<Entry> = entries
+        .into_iter()
+        .filter(|entry| entry.date.year() >= 2015)
+        .filter(|entry| entry.duration == DurationOfTransfer::Freehold)
+        .collect();
 
     println!("Calculating stats per postcode per year...");
 
-    let mut year: i32 = entries[0].date.year();
+    let mut year: i32 = filtered_entries[0].date.year();
     let mut postcode_year_prices: HashMap<String, YearEntry> = HashMap::new();
 
     let mut out_file = File::create("stats.json")?;
     out_file.write("[".as_bytes())?;
-    let mut it = entries.iter().peekable();
+    let mut it = filtered_entries.iter().peekable();
     while let Some(entry) = it.next() {
         if entry.date.year() != year || it.peek().is_none() {
             let mut processed_year_entries: HashMap<String, Vec<ProcessedYearEntry>> =
