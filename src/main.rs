@@ -203,7 +203,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     serde_json::to_writer(&out_file, &postcode_year_prices)?;
     out_file.write("]".as_bytes())?;
-    // println!("{:?}", records[123]);
 
     Ok(())
 }
