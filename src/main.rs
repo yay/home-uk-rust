@@ -1,6 +1,5 @@
 use chrono::{Datelike, NaiveDate};
 use clap::Parser;
-use rayon::prelude::*;
 use serde::Serialize;
 use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
