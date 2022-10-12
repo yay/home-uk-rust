@@ -23,7 +23,7 @@ struct Args {
     // count: u8,
 }
 
-#[derive(Hash, Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Hash, Clone, Copy, Eq, PartialEq, Debug, Serialize)]
 enum PropertyType {
     Detached,
     SemiDetached,
@@ -32,7 +32,7 @@ enum PropertyType {
     Other,
 }
 
-#[derive(Hash, Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Hash, Clone, Copy, Eq, PartialEq, Debug, Serialize)]
 enum PropertyAge {
     New,
     Old,
@@ -82,26 +82,35 @@ fn to_price_bucket(prices: &mut Vec<i32>) -> PriceBucket {
 }
 
 fn process_year_entry(entry: &mut YearEntry) -> ProcessedYearEntry {
-    let mut result = ProcessedYearEntry::default();
-    result.year = entry.year;
+    let mut result = ProcessedYearEntry {
+        year: entry.year,
+        buckets: HashMap::new(),
+    };
 
     for (property_type, age_entries) in entry.prices.iter_mut() {
         for (property_age, prices) in age_entries.iter_mut() {
-            result.buckets = HashMap::from([(
-                *property_type,
-                HashMap::from([(*property_age, to_price_bucket(prices))]),
-            )]);
+            result
+                .buckets
+                .entry(*property_type)
+                .or_insert(HashMap::from([(*property_age, to_price_bucket(prices))]))
+                .entry(*property_age)
+                .or_insert(to_price_bucket(prices));
         }
     }
 
     result
 }
 
-#[derive(Default)]
-struct ProcessedYearEntry {
-    postcode: String,
-    buckets: HashMap<PropertyType, HashMap<PropertyAge, PriceBucket>>,
+#[derive(Debug, Serialize)]
+struct ProcessedYearEntries {
     year: i32,
+    postcodes: HashMap<String, Vec<ProcessedYearEntry>>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProcessedYearEntry {
+    year: i32, // duplicate the year in this struct to make it easier to read the resulting JSON
+    buckets: HashMap<PropertyType, HashMap<PropertyAge, PriceBucket>>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -143,40 +152,52 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     entries.sort_unstable_by(|entry1, entry2| entry1.date.cmp(&entry2.date));
 
-    println!("Calculating average price range per postcode per year...");
+    println!("Calculating stats per postcode per year...");
 
     let mut year: i32 = entries[0].date.year();
-    let mut postcode_year_prices: HashMap<&String, YearEntry> = HashMap::new();
+    let mut postcode_year_prices: HashMap<String, YearEntry> = HashMap::new();
 
-    let mut out_file = File::create("data.json")?;
+    let mut out_file = File::create("stats.json")?;
     out_file.write("[".as_bytes())?;
-    let mut it = entries.iter();
+    let mut it = entries.iter().peekable();
     while let Some(entry) = it.next() {
-        if entry.date.year() != year {
-            year = entry.date.year();
-
-            // process_year_entry(postcode_year_prices.entry(key));
-            let mut postcode_year_prices: HashMap<&String, YearEntry> = HashMap::new();
-            serde_json::to_writer(&out_file, &postcode_year_prices)?;
+        if entry.date.year() != year || it.peek().is_none() {
+            let mut processed_year_entries: HashMap<String, Vec<ProcessedYearEntry>> =
+                HashMap::new();
+            for (postcode, year_entry) in postcode_year_prices.iter_mut() {
+                let processed_year_entry = process_year_entry(year_entry);
+                let postcode_processed_year_entries = processed_year_entries
+                    .entry(postcode.clone())
+                    .or_insert(vec![]);
+                postcode_processed_year_entries.push(processed_year_entry);
+            }
+            serde_json::to_writer(
+                &out_file,
+                &ProcessedYearEntries {
+                    year,
+                    postcodes: processed_year_entries,
+                },
+            )?;
             out_file.write(",".as_bytes())?;
 
+            year = entry.date.year();
             postcode_year_prices.clear();
         }
 
         let prices = postcode_year_prices
-            .entry(&entry.postcode)
+            .entry(entry.postcode.clone())
             .or_insert(YearEntry {
                 prices: HashMap::from([(
                     entry.property_type,
-                    HashMap::from([(entry.property_age, vec![entry.price])]),
+                    HashMap::from([(entry.property_age, vec![])]),
                 )]),
                 year: entry.date.year(),
             })
             .prices
             .entry(entry.property_type)
-            .or_insert(HashMap::from([(entry.property_age, vec![entry.price])]))
+            .or_insert(HashMap::from([(entry.property_age, vec![])]))
             .entry(entry.property_age)
-            .or_insert(vec![entry.price]);
+            .or_insert(vec![]);
 
         prices.push(entry.price);
     }
@@ -185,19 +206,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // println!("{:?}", records[123]);
 
     Ok(())
-}
-
-fn extend_range(range: Range<i32>, number: i32) -> Range<i32> {
-    if range.start == 0 && range.end == 0 {
-        return Range {
-            start: number,
-            end: number,
-        };
-    }
-    Range {
-        start: range.start.min(number),
-        end: range.end.max(number),
-    }
 }
 
 fn to_property_type(str: &str) -> PropertyType {
