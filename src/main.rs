@@ -1,5 +1,6 @@
 use chrono::{Datelike, NaiveDate};
 use clap::Parser;
+use rayon::prelude::*;
 use serde::Serialize;
 use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
@@ -177,6 +178,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .or_insert(vec![]);
                 postcode_processed_year_entries.push(processed_year_entry);
             }
+            println!("Saving stats for year: {:?}", year);
             serde_json::to_writer(
                 &out_file,
                 &ProcessedYearEntries {
