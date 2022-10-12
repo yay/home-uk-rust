@@ -204,15 +204,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let prices = postcode_year_prices
             .entry(entry.postcode.clone())
             .or_insert(YearEntry {
-                prices: HashMap::from([(
-                    entry.property_type,
-                    HashMap::from([(entry.property_age, vec![])]),
-                )]),
+                prices: HashMap::new(),
                 year: entry.date.year(),
             })
             .prices
             .entry(entry.property_type)
-            .or_insert(HashMap::from([(entry.property_age, vec![])]))
+            .or_insert(HashMap::new())
             .entry(entry.property_age)
             .or_insert(vec![]);
 
