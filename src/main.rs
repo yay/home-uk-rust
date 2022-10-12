@@ -102,7 +102,7 @@ fn process_year_entry(entry: &mut YearEntry) -> ProcessedYearEntry {
             result
                 .buckets
                 .entry(*property_type)
-                .or_insert(HashMap::from([(*property_age, to_price_bucket(prices))]))
+                .or_insert(HashMap::new())
                 .entry(*property_age)
                 .or_insert(to_price_bucket(prices));
         }
