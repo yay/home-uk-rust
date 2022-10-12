@@ -73,12 +73,22 @@ fn to_price_bucket(prices: &mut Vec<i32>) -> PriceBucket {
 
     prices.sort_unstable();
     result.count = prices.len();
-    result.median = prices[prices.len() / 2] as f32;
+    result.median = get_median(&prices);
     let min = *prices.iter().min().unwrap_or(&0);
     let max = *prices.iter().max().unwrap_or(&0);
     result.range = min..max;
 
     result
+}
+
+fn get_median(prices: &Vec<i32>) -> f32 {
+    let len = prices.len();
+    if len >= 2 && len % 2 == 0 {
+        let middle = len / 2;
+        (prices[middle - 1] + prices[middle]) as f32 / 2f32
+    } else {
+        prices[len / 2] as f32
+    }
 }
 
 fn process_year_entry(entry: &mut YearEntry) -> ProcessedYearEntry {
