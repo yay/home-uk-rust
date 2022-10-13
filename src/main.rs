@@ -73,7 +73,7 @@ fn to_price_bucket(prices: &mut Vec<i32>) -> PriceBucket {
 
     prices.sort_unstable();
     result.count = prices.len();
-    result.median = get_median(&prices);
+    result.median = find_median(&prices);
     let min = *prices.iter().min().unwrap_or(&0);
     let max = *prices.iter().max().unwrap_or(&0);
     result.range = min..max;
@@ -81,7 +81,7 @@ fn to_price_bucket(prices: &mut Vec<i32>) -> PriceBucket {
     result
 }
 
-fn get_median(prices: &Vec<i32>) -> f32 {
+fn find_median(prices: &Vec<i32>) -> f32 {
     let len = prices.len();
     if len >= 2 && len % 2 == 0 {
         let middle = len / 2;
