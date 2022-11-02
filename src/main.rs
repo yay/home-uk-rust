@@ -48,6 +48,7 @@ enum DurationOfTransfer {
 struct Entry {
     price: i32,
     date: NaiveDate,
+    address: String,
     postcode: String, // postcodes can be reallocated and these changes are not reflected in the Price Paid Dataset
     property_type: PropertyType,
     property_age: PropertyAge,
@@ -57,7 +58,7 @@ struct Entry {
 #[derive(Debug, Serialize)]
 struct YearEntry {
     #[serde(skip_serializing)]
-    prices: HashMap<PropertyType, HashMap<PropertyAge, Vec<i32>>>,
+    properties: HashMap<PropertyType, HashMap<PropertyAge, Vec<Property>>>,
     year: i32,
 }
 
@@ -66,17 +67,30 @@ struct PriceBucket {
     count: usize,
     median: f32,
     range: Range<i32>,
+    properties: Vec<Property>,
 }
 
-fn to_price_bucket(prices: &mut Vec<i32>) -> PriceBucket {
+#[derive(Debug, Default, Serialize, Clone)]
+struct Property {
+    address: String,
+    price: i32,
+}
+
+fn to_price_bucket(properties: &mut Vec<Property>) -> PriceBucket {
     let mut result = PriceBucket::default();
 
+    let mut prices: Vec<i32> = properties.iter().map(|p| p.price).collect();
     prices.sort_unstable();
     result.count = prices.len();
     result.median = find_median(&prices);
     let min = *prices.iter().min().unwrap_or(&0);
     let max = *prices.iter().max().unwrap_or(&0);
     result.range = min..max;
+    result.properties = properties
+        .iter()
+        .filter(|p| p.price >= 300_000 && p.price <= 800_000)
+        .cloned()
+        .collect();
 
     result
 }
@@ -97,14 +111,14 @@ fn process_year_entry(entry: &mut YearEntry) -> ProcessedYearEntry {
         buckets: HashMap::new(),
     };
 
-    for (property_type, age_entries) in entry.prices.iter_mut() {
-        for (property_age, prices) in age_entries.iter_mut() {
+    for (property_type, age_entries) in entry.properties.iter_mut() {
+        for (property_age, properties) in age_entries.iter_mut() {
             result
                 .buckets
                 .entry(*property_type)
                 .or_insert(HashMap::new())
                 .entry(*property_age)
-                .or_insert(to_price_bucket(prices));
+                .or_insert(to_price_bucket(properties));
         }
     }
 
@@ -134,23 +148,47 @@ fn main() -> Result<(), Box<dyn Error>> {
     for result in reader.records() {
         let record = result?;
 
-        let price: i32 = record.get(1).unwrap().parse().unwrap();
         let date = NaiveDate::parse_from_str(record.get(2).unwrap(), DATE_FORMAT)?;
-        let postcode = record
-            .get(3)
-            .unwrap()
-            .split(" ")
-            .nth(0)
-            .unwrap()
-            .to_string();
-        let property_type = to_property_type(record.get(4).unwrap());
-        let property_age = to_property_age(record.get(5).unwrap());
+        if date.year() < 2021 {
+            continue;
+        }
         let duration = to_duration_of_transfer(record.get(6).unwrap());
+        if duration != DurationOfTransfer::Leasehold {
+            continue;
+        }
+        let postcode = record.get(3).unwrap().split(" ").nth(0).unwrap();
+        if !DESIRABLE_POSTCODES.contains(&postcode) {
+            continue;
+        }
+        let property_type = to_property_type(record.get(4).unwrap());
+        if property_type == PropertyType::Other {
+            continue;
+        }
+
+        let price: i32 = record.get(1).unwrap().parse().unwrap();
+        let property_age = to_property_age(record.get(5).unwrap());
+        let paon = record.get(7).unwrap();
+        let saon = record.get(8).unwrap();
+        let street = record.get(9).unwrap();
+        let city = record.get(11).unwrap();
+        let mut address = "".to_string();
+        if !paon.is_empty() {
+            address += paon;
+            address += ", ";
+        }
+        if !saon.is_empty() {
+            address += saon;
+            address += ", ";
+        }
+        address += street;
+        address += ", ";
+        address += city;
 
         let entry = Entry {
             price,
             date,
-            postcode,
+            address,
+            postcode: postcode.to_string(),
             property_type,
             property_age,
             duration,
@@ -161,26 +199,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Sorting and filtering entries...");
 
     entries.sort_unstable_by(|entry1, entry2| entry1.date.cmp(&entry2.date));
-    let filtered_entries: Vec<Entry> = entries
-        .into_iter()
-        .filter(|entry| entry.date.year() >= 2015)
-        .filter(|entry| entry.duration == DurationOfTransfer::Freehold)
-        .filter(|entry| LONDON_POSTCODES.contains(&entry.postcode.as_str()))
-        .collect();
+    // It's less pretty but faster to filter in the reader loop above than here.
+    // Given the huge size of our CSV, any performance improvement is welcome.
+    // entries = entries
+    //     .into_iter()
+    //     .filter(|entry| entry.date.year() >= 2021)
+    //     .filter(|entry| entry.duration == DurationOfTransfer::Freehold)
+    //     .filter(|entry| LONDON_POSTCODES.contains(&entry.postcode.as_str()))
+    //     .collect();
 
     println!("Calculating stats per postcode per year...");
 
-    let mut year: i32 = filtered_entries[0].date.year();
-    let mut postcode_year_prices: HashMap<String, YearEntry> = HashMap::new();
+    let mut year: i32 = entries[0].date.year();
+    let mut postcode_year_entries: HashMap<String, YearEntry> = HashMap::new();
 
     let mut out_file = File::create("stats.json")?;
     out_file.write("[".as_bytes())?;
-    let mut it = filtered_entries.iter().peekable();
+    let mut it = entries.iter().peekable();
     while let Some(entry) = it.next() {
         if entry.date.year() != year || it.peek().is_none() {
             let mut processed_year_entries: HashMap<String, Vec<ProcessedYearEntry>> =
                 HashMap::new();
-            for (postcode, year_entry) in postcode_year_prices.iter_mut() {
+            for (postcode, year_entry) in postcode_year_entries.iter_mut() {
                 let processed_year_entry = process_year_entry(year_entry);
                 let postcode_processed_year_entries = processed_year_entries
                     .entry(postcode.clone())
@@ -198,24 +238,27 @@ fn main() -> Result<(), Box<dyn Error>> {
             out_file.write(",".as_bytes())?;
 
             year = entry.date.year();
-            postcode_year_prices.clear();
+            postcode_year_entries.clear();
         }
 
-        let prices = postcode_year_prices
+        let properties = postcode_year_entries
             .entry(entry.postcode.clone())
             .or_insert(YearEntry {
-                prices: HashMap::new(),
+                properties: HashMap::new(),
                 year: entry.date.year(),
             })
-            .prices
+            .properties
             .entry(entry.property_type)
             .or_insert(HashMap::new())
             .entry(entry.property_age)
             .or_insert(vec![]);
 
-        prices.push(entry.price);
+        properties.push(Property {
+            address: entry.address.clone(),
+            price: entry.price,
+        });
     }
-    serde_json::to_writer(&out_file, &postcode_year_prices)?;
+    serde_json::to_writer(&out_file, &postcode_year_entries)?;
     out_file.write("]".as_bytes())?;
 
     Ok(())
@@ -245,6 +288,7 @@ fn to_duration_of_transfer(str: &str) -> DurationOfTransfer {
     }
 }
 
+// Greater London is too big and includes fairly remote areas.
 const LONDON_POSTCODES: &'static [&'static str] = &[
     "EC1A", "EC1M", "EC1N", "EC1P", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2P", "EC2R",
     "EC2V", "EC2Y", "EC3A", "EC3M", "EC3N", "EC3P", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4P",
@@ -260,3 +304,18 @@ const LONDON_POSTCODES: &'static [&'static str] = &[
     "SW19", "SW20", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12",
     "W13", "W14",
 ];
+
+// Inner London still includes relatively far away areas (like E4 and N4).
+// https://en.wikipedia.org/wiki/Inner_London
+
+const CENTRAL_LONDON_POSTCODES: &'static [&'static str] = &[
+    "EC1A", "EC1M", "EC1N", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2R", "EC2V", "EC2Y",
+    "EC3A", "EC3M", "EC3N", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4R", "EC4V", "EC4Y", "WC1A",
+    "WC1B", "WC1E", "WC1H", "WC1N", "WC1R", "WC1V", "WC1X", "WC2A", "WC2B", "WC2E", "WC2H", "WC2N",
+    "WC2R", "E1", "E2", "E3", "E8", "E9", "E14", "E15", "E16", "N1", "N5", "N8", "N16", "NW1",
+    "NW3", "NW5", "NW6", "NW8", "NW10", "SE1", "SE3", "SE4", "SE5", "SE7", "SE8", "SE10", "SE11",
+    "SE13", "SE14", "SE15", "SE16", "SE17", "SE18", "SW1", "SW2", "SW3", "SW4", "SW5", "SW6",
+    "SW7", "SW8", "SW9", "SW10", "SW11", "W1", "W2", "W8", "W9", "W10", "W11", "W14",
+];
+
+const DESIRABLE_POSTCODES: &'static [&'static str] = &["E14", "E16", "SE1", "SE16"];

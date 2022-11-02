@@ -1,4 +1,4 @@
 /target
 .idea
 *.csv
-stats.json
+*.json
