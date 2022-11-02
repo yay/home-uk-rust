@@ -52,7 +52,7 @@ struct Entry {
     postcode: String, // postcodes can be reallocated and these changes are not reflected in the Price Paid Dataset
     property_type: PropertyType,
     property_age: PropertyAge,
-    duration: DurationOfTransfer,
+    // duration: DurationOfTransfer,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,14 +152,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         if date.year() < 2021 {
             continue;
         }
+
         let duration = to_duration_of_transfer(record.get(6).unwrap());
         if duration != DurationOfTransfer::Leasehold {
             continue;
         }
-        let postcode = record.get(3).unwrap().split(" ").nth(0).unwrap();
-        if !INCLUDED_POSTCODES.contains(&postcode) {
+
+        let postcode_parts: Vec<&str> = record.get(3).unwrap().split(" ").collect();
+        let postcode1 = postcode_parts[0];
+        let postcode2 = postcode_parts.get(1).unwrap_or(&"");
+        if !INCLUDED_POSTCODES.contains(&postcode1) {
             continue;
         }
+
         let property_type = to_property_type(record.get(4).unwrap());
         if property_type == PropertyType::Other {
             continue;
@@ -183,15 +188,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         address += street;
         address += ", ";
         address += city;
+        address += ", ";
+        address += postcode1;
+        if !postcode2.is_empty() {
+            address += " ";
+            address += postcode2;
+        }
 
         let entry = Entry {
             price,
             date,
             address,
-            postcode: postcode.to_string(),
+            postcode: postcode1.to_string(),
             property_type,
             property_age,
-            duration,
+            // duration,
         };
         entries.push(entry);
     }
@@ -289,34 +300,34 @@ fn to_duration_of_transfer(str: &str) -> DurationOfTransfer {
 }
 
 // Greater London is too big and includes fairly remote areas.
-const LONDON_POSTCODES: &'static [&'static str] = &[
-    "EC1A", "EC1M", "EC1N", "EC1P", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2P", "EC2R",
-    "EC2V", "EC2Y", "EC3A", "EC3M", "EC3N", "EC3P", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4P",
-    "EC4R", "EC4V", "EC4Y", "WC1A", "WC1B", "WC1E", "WC1H", "WC1N", "WC1R", "WC1V", "WC1X", "WC2A",
-    "WC2B", "WC2E", "WC2H", "WC2N", "WC2R", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9",
-    "E10", "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E19", "E20", "N1", "N2", "N3",
-    "N4", "N5", "N6", "N7", "N8", "N9", "N10", "N11", "N12", "N13", "N14", "N15", "N16", "N17",
-    "N18", "N19", "N20", "N21", "N22", "NW1", "NW2", "NW3", "NW4", "NW5", "NW6", "NW7", "NW8",
-    "NW9", "NW10", "NW11", "SE1", "SE2", "SE3", "SE4", "SE5", "SE6", "SE7", "SE8", "SE9", "SE10",
-    "SE11", "SE12", "SE13", "SE14", "SE15", "SE16", "SE17", "SE18", "SE19", "SE20", "SE21", "SE22",
-    "SE23", "SE24", "SE25", "SE26", "SE27", "SE28", "SW1", "SW2", "SW3", "SW4", "SW5", "SW6",
-    "SW7", "SW8", "SW9", "SW10", "SW11", "SW12", "SW13", "SW14", "SW15", "SW16", "SW17", "SW18",
-    "SW19", "SW20", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12",
-    "W13", "W14",
-];
+// const LONDON_POSTCODES: &'static [&'static str] = &[
+//     "EC1A", "EC1M", "EC1N", "EC1P", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2P", "EC2R",
+//     "EC2V", "EC2Y", "EC3A", "EC3M", "EC3N", "EC3P", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4P",
+//     "EC4R", "EC4V", "EC4Y", "WC1A", "WC1B", "WC1E", "WC1H", "WC1N", "WC1R", "WC1V", "WC1X", "WC2A",
+//     "WC2B", "WC2E", "WC2H", "WC2N", "WC2R", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9",
+//     "E10", "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E19", "E20", "N1", "N2", "N3",
+//     "N4", "N5", "N6", "N7", "N8", "N9", "N10", "N11", "N12", "N13", "N14", "N15", "N16", "N17",
+//     "N18", "N19", "N20", "N21", "N22", "NW1", "NW2", "NW3", "NW4", "NW5", "NW6", "NW7", "NW8",
+//     "NW9", "NW10", "NW11", "SE1", "SE2", "SE3", "SE4", "SE5", "SE6", "SE7", "SE8", "SE9", "SE10",
+//     "SE11", "SE12", "SE13", "SE14", "SE15", "SE16", "SE17", "SE18", "SE19", "SE20", "SE21", "SE22",
+//     "SE23", "SE24", "SE25", "SE26", "SE27", "SE28", "SW1", "SW2", "SW3", "SW4", "SW5", "SW6",
+//     "SW7", "SW8", "SW9", "SW10", "SW11", "SW12", "SW13", "SW14", "SW15", "SW16", "SW17", "SW18",
+//     "SW19", "SW20", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12",
+//     "W13", "W14",
+// ];
 
 // Inner London still includes relatively far away areas (like E4 and N4).
 // https://en.wikipedia.org/wiki/Inner_London
 
-const CENTRAL_LONDON_POSTCODES: &'static [&'static str] = &[
-    "EC1A", "EC1M", "EC1N", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2R", "EC2V", "EC2Y",
-    "EC3A", "EC3M", "EC3N", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4R", "EC4V", "EC4Y", "WC1A",
-    "WC1B", "WC1E", "WC1H", "WC1N", "WC1R", "WC1V", "WC1X", "WC2A", "WC2B", "WC2E", "WC2H", "WC2N",
-    "WC2R", "E1", "E2", "E3", "E8", "E9", "E14", "E15", "E16", "N1", "N5", "N8", "N16", "NW1",
-    "NW3", "NW5", "NW6", "NW8", "NW10", "SE1", "SE3", "SE4", "SE5", "SE7", "SE8", "SE10", "SE11",
-    "SE13", "SE14", "SE15", "SE16", "SE17", "SE18", "SW1", "SW2", "SW3", "SW4", "SW5", "SW6",
-    "SW7", "SW8", "SW9", "SW10", "SW11", "W1", "W2", "W8", "W9", "W10", "W11", "W14",
-];
+// const CENTRAL_LONDON_POSTCODES: &'static [&'static str] = &[
+//     "EC1A", "EC1M", "EC1N", "EC1R", "EC1V", "EC1Y", "EC2A", "EC2M", "EC2N", "EC2R", "EC2V", "EC2Y",
+//     "EC3A", "EC3M", "EC3N", "EC3R", "EC3V", "EC4A", "EC4M", "EC4N", "EC4R", "EC4V", "EC4Y", "WC1A",
+//     "WC1B", "WC1E", "WC1H", "WC1N", "WC1R", "WC1V", "WC1X", "WC2A", "WC2B", "WC2E", "WC2H", "WC2N",
+//     "WC2R", "E1", "E2", "E3", "E8", "E9", "E14", "E15", "E16", "N1", "N5", "N8", "N16", "NW1",
+//     "NW3", "NW5", "NW6", "NW8", "NW10", "SE1", "SE3", "SE4", "SE5", "SE7", "SE8", "SE10", "SE11",
+//     "SE13", "SE14", "SE15", "SE16", "SE17", "SE18", "SW1", "SW2", "SW3", "SW4", "SW5", "SW6",
+//     "SW7", "SW8", "SW9", "SW10", "SW11", "W1", "W2", "W8", "W9", "W10", "W11", "W14",
+// ];
 
 const DESIRABLE_POSTCODES: &'static [&'static str] = &["E14", "E16", "SE1", "SE16"];
 
