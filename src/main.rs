@@ -157,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             continue;
         }
         let postcode = record.get(3).unwrap().split(" ").nth(0).unwrap();
-        if !DESIRABLE_POSTCODES.contains(&postcode) {
+        if !INCLUDED_POSTCODES.contains(&postcode) {
             continue;
         }
         let property_type = to_property_type(record.get(4).unwrap());
@@ -205,7 +205,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //     .into_iter()
     //     .filter(|entry| entry.date.year() >= 2021)
     //     .filter(|entry| entry.duration == DurationOfTransfer::Freehold)
-    //     .filter(|entry| LONDON_POSTCODES.contains(&entry.postcode.as_str()))
+    //     .filter(|entry| INCLUDED_POSTCODES.contains(&entry.postcode.as_str()))
     //     .collect();
 
     println!("Calculating stats per postcode per year...");
@@ -319,3 +319,5 @@ const CENTRAL_LONDON_POSTCODES: &'static [&'static str] = &[
 ];
 
 const DESIRABLE_POSTCODES: &'static [&'static str] = &["E14", "E16", "SE1", "SE16"];
+
+const INCLUDED_POSTCODES: &'static [&'static str] = DESIRABLE_POSTCODES;
