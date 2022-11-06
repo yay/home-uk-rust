@@ -1,6 +1,5 @@
 use chrono::{Datelike, NaiveDate};
 use clap::Parser;
-use eframe::egui;
 use serde::Serialize;
 use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
@@ -13,42 +12,6 @@ use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
 const DEFAULT_FILE_NAME: &str = "pp-complete.csv";
 const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
-
-struct HomeApp {
-    name: String,
-    age: u32,
-}
-
-impl Default for HomeApp {
-    fn default() -> Self {
-        Self {
-            name: "Arthur".to_owned(),
-            age: 42,
-        }
-    }
-}
-
-impl eframe::App for HomeApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
-            if ui.button("Process price paid data").clicked() {
-                process_price_paid_data(DEFAULT_FILE_NAME.to_string()).unwrap_or_else(|_| {
-                    println!("Operation failed");
-                })
-            }
-        });
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -175,22 +138,10 @@ struct ProcessedYearEntry {
 }
 
 fn main() {
-    // let args = Args::parse();
-
-    // Log to stdout (if you run with `RUST_LOG=debug`).
-    // tracing_subscriber::fmt::init();
-
-    let options = eframe::NativeOptions {
-        drag_and_drop_support: true,
-        initial_window_size: Some([1280.0, 1024.0].into()),
-        renderer: eframe::Renderer::Wgpu,
-        ..Default::default()
-    };
-    eframe::run_native(
-        "Home",
-        options,
-        Box::new(|_cc| Box::new(HomeApp::default())),
-    );
+    let args = Args::parse();
+    process_price_paid_data(args.file).unwrap_or_else(|_| {
+        println!("Processing price data failed");
+    });
 }
 
 fn process_price_paid_data(path: String) -> Result<(), Box<dyn Error>> {
