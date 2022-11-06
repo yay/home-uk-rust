@@ -1,5 +1,6 @@
 use chrono::{Datelike, NaiveDate};
 use clap::Parser;
+use eframe::egui;
 use serde::Serialize;
 use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
@@ -12,6 +13,37 @@ use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 
 const DEFAULT_FILE_NAME: &str = "pp-complete.csv";
 const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
+
+struct MyApp {
+    name: String,
+    age: u32,
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            name: "Arthur".to_owned(),
+            age: 42,
+        }
+    }
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("My egui Application");
+            ui.horizontal(|ui| {
+                ui.label("Your name: ");
+                ui.text_edit_singleline(&mut self.name);
+            });
+            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
+            if ui.button("Click each year").clicked() {
+                self.age += 1;
+            }
+            ui.label(format!("Hello '{}', age {}", self.name, self.age));
+        });
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -137,7 +169,16 @@ struct ProcessedYearEntry {
     buckets: HashMap<PropertyType, HashMap<PropertyAge, PriceBucket>>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "My egui App",
+        options,
+        Box::new(|_cc| Box::new(MyApp::default())),
+    );
+}
+
+fn main_() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     println!("Parsing CSV file...");
