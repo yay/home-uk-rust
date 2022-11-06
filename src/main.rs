@@ -14,12 +14,12 @@ use std::{collections::HashMap, error::Error, fs::File, io::Write, ops::Range};
 const DEFAULT_FILE_NAME: &str = "pp-complete.csv";
 const DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
 
-struct MyApp {
+struct HomeApp {
     name: String,
     age: u32,
 }
 
-impl Default for MyApp {
+impl Default for HomeApp {
     fn default() -> Self {
         Self {
             name: "Arthur".to_owned(),
@@ -28,7 +28,7 @@ impl Default for MyApp {
     }
 }
 
-impl eframe::App for MyApp {
+impl eframe::App for HomeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
@@ -41,6 +41,11 @@ impl eframe::App for MyApp {
                 self.age += 1;
             }
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
+            if ui.button("Process price paid data").clicked() {
+                process_price_paid_data(DEFAULT_FILE_NAME.to_string()).unwrap_or_else(|_| {
+                    println!("Operation failed");
+                })
+            }
         });
     }
 }
@@ -170,20 +175,28 @@ struct ProcessedYearEntry {
 }
 
 fn main() {
-    let options = eframe::NativeOptions::default();
+    // let args = Args::parse();
+
+    // Log to stdout (if you run with `RUST_LOG=debug`).
+    // tracing_subscriber::fmt::init();
+
+    let options = eframe::NativeOptions {
+        drag_and_drop_support: true,
+        initial_window_size: Some([1280.0, 1024.0].into()),
+        renderer: eframe::Renderer::Wgpu,
+        ..Default::default()
+    };
     eframe::run_native(
-        "My egui App",
+        "Home",
         options,
-        Box::new(|_cc| Box::new(MyApp::default())),
+        Box::new(|_cc| Box::new(HomeApp::default())),
     );
 }
 
-fn main_() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
-
+fn process_price_paid_data(path: String) -> Result<(), Box<dyn Error>> {
     println!("Parsing CSV file...");
 
-    let mut reader = csv::Reader::from_path(args.file)?;
+    let mut reader = csv::Reader::from_path(path)?;
     let mut entries: Vec<Entry> = Vec::new();
 
     for result in reader.records() {
